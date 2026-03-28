@@ -137,32 +137,27 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         logging.info("Bot đã dừng!")
 def get_daily_report():
-    conn = sqlite3.connect('helpdesk.db')
-    cursor = conn.cursor()
-    
-    # Đếm các trạng thái
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Mới'")
-    new = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Đang xử lý'")
-    pending = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Hoàn thành'")
-    done = cursor.fetchone()[0]
-    
-    conn.close()
-    
-    now = datetime.now().strftime("%d/%m/%Y")
-    report = (f"📊 **BÁO CÁO TỔNG KẾT NGÀY {now}**\n\n"
-              f"🆕 Ticket mới: {new}\n"
-              f"⏳ Đang xử lý: {pending}\n"
-              f"✅ Đã hoàn thành: {done}\n"
-              f"----------------------------\n"
-              f"🔥 Chúc đội ngũ kỹ thuật nghỉ ngơi vui vẻ!")
-    return report
-
-# Lệnh để Admin chủ động xem báo cáo bất cứ lúc nào
-@dp.message(Command("report"))
-async def send_report(message: Message):
-    report_text = get_daily_report()
-    await message.answer(report_text)
+    try:
+        conn = sqlite3.connect('helpdesk.db')
+        cursor = conn.cursor()
+        
+        # Lấy số lượng từng loại
+        cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Mới'")
+        new_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Đang xử lý'")
+        pending_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Hoàn thành'")
+        done_count = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        now = datetime.now().strftime("%d/%m/%Y %H:%M")
+        return (f"📊 **BÁO CÁO HỆ THỐNG**\n"
+                f"⏰ Cập nhật: {now}\n\n"
+                f"🆕 Mới: {new_count}\n"
+                f"⏳ Đang xử lý: {pending_count}\n"
+                f"✅ Hoàn thành: {done_count}")
+    except Exception as e:
+        return f"❌ Lỗi khi đọc Database: {e}"
