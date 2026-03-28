@@ -1,3 +1,4 @@
+import os
 import logging
 import asyncio
 import sqlite3  # <--- VỊ TRÍ 1: Import thư viện database ở đầu file
@@ -7,8 +8,8 @@ from aiogram.types import Message, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- CẤU HÌNH ---
-API_TOKEN = '8576826985:AAE3CkWqTN0q7FuqXpZsOQkfenRObAFNBK4'
-ADMIN_GROUP_ID = -5260948214 
+API_TOKEN = os.getenv('BOT_TOKEN')
+ADMIN_GROUP_ID = int(os.getenv('ADMIN_GROUP_ID')) 
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
