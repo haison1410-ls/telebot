@@ -106,42 +106,13 @@ async def process_done(callback: types.CallbackQuery):
     
     await callback.answer("Đã đóng ticket!")
 
-# --- VỊ TRÍ 4: HÀM CHẠY CHÍNH (Cuối file) ---
-from flask import Flask
-import threading
+# --- VỊ TRÍ 4: HÀM BÁO CÁO (Đặt trên hàm main) ---
 
-# 1. Tạo một ứng dụng Web siêu nhỏ
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is alive!"
-
-def run_web():
-    # Render yêu cầu mở cổng 8080 để kiểm tra tình trạng sống/chết
-    app.run(host='0.0.0.0', port=8080)
-
-# 2. Sửa lại hàm chạy chính để chạy cả Web và Bot
-async def main():
-    # Chạy Web Server giả trong một luồng riêng (luồng daemon để tự tắt khi bot tắt)
-    threading.Thread(target=run_web, daemon=True).start()
-    
-    print("Bot đang chạy và đã mở cổng giả 8080 cho Render...")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    # Cấu hình nhật ký để theo dõi lỗi
-    logging.basicConfig(level=logging.INFO)
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Bot đã dừng!")
 def get_daily_report():
     try:
         conn = sqlite3.connect('helpdesk.db')
         cursor = conn.cursor()
         
-        # Lấy số lượng từng loại
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Mới'")
         new_count = cursor.fetchone()[0]
         
@@ -161,3 +132,51 @@ def get_daily_report():
                 f"✅ Hoàn thành: {done_count}")
     except Exception as e:
         return f"❌ Lỗi khi đọc Database: {e}"
+
+# Handler xử lý lệnh /report
+@dp.message(Command("report"))
+async def send_report(message: Message):
+    # Chỉ cho phép trong nhóm Admin hoặc bạn nhắn tin riêng cho Bot
+    report_text = get_daily_report()
+    await message.answer(report_text)
+
+# --- PHẦN CHẠY WEB VÀ BOT (Luôn để ở cuối cùng) ---
+from flask import Flask
+import threading
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run_web():
+    app.run(host='0.0.0.0', port=8080)
+
+async def daily_scheduler():
+    """Hàm tự động gửi báo cáo lúc 20:00 (Giờ VN = 13:00 UTC)"""
+    while True:
+        now = datetime.now().strftime("%H:%M")
+        # Render dùng giờ UTC, nên 13:00 UTC là 20:00 VN
+        if now == "13:00": 
+            report_text = get_daily_report()
+            await bot.send_message(ADMIN_GROUP_ID, f"🔔 **BÁO CÁO TỰ ĐỘNG**\n\n{report_text}")
+            await asyncio.sleep(61) 
+        await asyncio.sleep(30)
+
+async def main():
+    # 1. Chạy Web giả cho Render
+    threading.Thread(target=run_web, daemon=True).start()
+    
+    # 2. Chạy bộ hẹn giờ báo cáo tự động
+    asyncio.create_task(daily_scheduler())
+    
+    print("Bot đang chạy, đã mở cổng giả và hẹn giờ báo cáo 20:00...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Bot đã dừng!")
