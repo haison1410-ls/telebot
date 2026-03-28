@@ -162,7 +162,7 @@ def get_daily_report():
     return report
 
 # Lệnh để Admin chủ động xem báo cáo bất cứ lúc nào
-@dp.message(Command("report"), F.chat.id == ADMIN_GROUP_ID)
+@dp.message(Command("report"))
 async def send_report(message: Message):
     report_text = get_daily_report()
     await message.answer(report_text)
