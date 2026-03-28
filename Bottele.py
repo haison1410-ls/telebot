@@ -107,13 +107,35 @@ async def process_done(callback: types.CallbackQuery):
     await callback.answer("Đã đóng ticket!")
 
 # --- VỊ TRÍ 4: HÀM CHẠY CHÍNH (Cuối file) ---
+from flask import Flask
+import threading
+
+# 1. Tạo một ứng dụng Web siêu nhỏ
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run_web():
+    # Render yêu cầu mở cổng 8080 để kiểm tra tình trạng sống/chết
+    app.run(host='0.0.0.0', port=8080)
+
+# 2. Sửa lại hàm chạy chính để chạy cả Web và Bot
 async def main():
-    print("Bot đang chạy...")
+    # Chạy Web Server giả trong một luồng riêng (luồng daemon để tự tắt khi bot tắt)
+    threading.Thread(target=run_web, daemon=True).start()
+    
+    print("Bot đang chạy và đã mở cổng giả 8080 cho Render...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
+    # Cấu hình nhật ký để theo dõi lỗi
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Bot đã dừng!")
 def get_daily_report():
     conn = sqlite3.connect('helpdesk.db')
     cursor = conn.cursor()
