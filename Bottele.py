@@ -1,4 +1,3 @@
-import os
 import logging
 import asyncio
 import sqlite3  # <--- VỊ TRÍ 1: Import thư viện database ở đầu file
@@ -6,10 +5,10 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+from datetime import datetime
 # --- CẤU HÌNH ---
-API_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_GROUP_ID = int(os.getenv('ADMIN_GROUP_ID')) 
+API_TOKEN = '8576826985:AAE3CkWqTN0q7FuqXpZsOQkfenRObAFNBK4'
+ADMIN_GROUP_ID = -5260948214 
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -115,3 +114,33 @@ async def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
+def get_daily_report():
+    conn = sqlite3.connect('helpdesk.db')
+    cursor = conn.cursor()
+    
+    # Đếm các trạng thái
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Mới'")
+    new = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Đang xử lý'")
+    pending = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'Hoàn thành'")
+    done = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    now = datetime.now().strftime("%d/%m/%Y")
+    report = (f"📊 **BÁO CÁO TỔNG KẾT NGÀY {now}**\n\n"
+              f"🆕 Ticket mới: {new}\n"
+              f"⏳ Đang xử lý: {pending}\n"
+              f"✅ Đã hoàn thành: {done}\n"
+              f"----------------------------\n"
+              f"🔥 Chúc đội ngũ kỹ thuật nghỉ ngơi vui vẻ!")
+    return report
+
+# Lệnh để Admin chủ động xem báo cáo bất cứ lúc nào
+@dp.message(Command("report"), F.chat.id == ADMIN_GROUP_ID)
+async def send_report(message: Message):
+    report_text = get_daily_report()
+    await message.answer(report_text)
