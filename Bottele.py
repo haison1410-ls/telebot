@@ -64,27 +64,41 @@ async def handle_user_request(message: Message):
 # Xử lý nút "Nhận ticket"
 @dp.callback_query(F.data.startswith("accept_"))
 async def process_accept(callback: types.CallbackQuery):
+    # 1. Lấy thông tin
     user_id = int(callback.data.split("_")[1])
+    admin_name = callback.from_user.full_name  # Lấy tên của Admin vừa ấn nút
     
-    # CẬP NHẬT TRẠNG THÁI TRONG DATABASE
+    # 2. Cập nhật Database (Ghi đè tên Admin vào cột handler_name)
     conn = sqlite3.connect('helpdesk.db')
     cursor = conn.cursor()
-    cursor.execute("UPDATE tickets SET status = ? WHERE user_id = ? AND status = ?", ("Đang xử lý", user_id, "Mới"))
+    cursor.execute(
+        "UPDATE tickets SET status = ?, handler_name = ? WHERE user_id = ? AND status = ?", 
+        ("Đang xử lý", admin_name, user_id, "Mới")
+    )
     conn.commit()
     conn.close()
 
-    await bot.send_message(user_id, f"👨‍💻 {callback.from_user.full_name} đang xử lý yêu cầu của bạn!")
+    # 3. Thông báo cho khách hàng biết AI đang giúp họ
+    await bot.send_message(user_id, f"👨‍💻 Chào bạn, {admin_name} đã nhận yêu cầu và đang xử lý cho bạn!")
     
+    # 4. Tạo nút "Hoàn thành" mới
     new_builder = InlineKeyboardBuilder()
     new_builder.row(InlineKeyboardButton(text="✅ Hoàn thành", callback_data=f"done_{user_id}"))
     
-    # Sửa tin nhắn trong nhóm Admin (Dùng try-except để tránh lỗi nếu tin nhắn quá cũ)
-    try:
-        await callback.message.edit_text(f"{callback.message.text}\n\n📌 **Đang xử lý bởi:** {callback.from_user.full_name}", reply_markup=new_builder.as_markup())
-    except:
-        await callback.message.edit_caption(caption=f"{callback.message.caption}\n\n📌 **Đang xử lý bởi:** {callback.from_user.full_name}", reply_markup=new_builder.as_markup())
+    # 5. Cập nhật tin nhắn trong nhóm Admin để ai cũng thấy người đã nhận
+    current_text = callback.message.text or callback.message.caption
+    updated_text = f"{current_text}\n\n📌 **Đã nhận bởi:** {admin_name}"
     
-    await callback.answer("Đã nhận ticket!")
+    try:
+        if callback.message.text:
+            await callback.message.edit_text(updated_text, reply_markup=new_builder.as_markup())
+        else:
+            await callback.message.edit_caption(caption=updated_text, reply_markup=new_builder.as_markup())
+    except Exception as e:
+        print(f"Lỗi khi cập nhật giao diện: {e}")
+    
+    # Hiện thông báo nhỏ trên màn hình Admin
+    await callback.answer(f"Bạn đã nhận ticket của khách!")
 
 # Xử lý nút "Hoàn thành"
 @dp.callback_query(F.data.startswith("done_"))
