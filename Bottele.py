@@ -152,7 +152,7 @@ async def process_accept(callback: types.CallbackQuery):
     if callback.message.text:
         await callback.message.edit_text(text, reply_markup=new_builder.as_markup())
     else:
-        await callback.message.edit_caption(caption=text, reply_markup=new_builder.as_markup())
+    await callback.message.edit_caption(caption=text, reply_markup=new_builder.as_markup())
 
 @dp.callback_query(F.data.startswith("done_"))
 async def process_done(callback: types.CallbackQuery):
