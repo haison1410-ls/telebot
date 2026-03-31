@@ -287,42 +287,74 @@ async def send_report(message: Message):
     await message.answer(report_text)
 
 # --- PHẦN CHẠY WEB VÀ BOT (Luôn để ở cuối cùng) ---
-from flask import Flask
-import threading
+# --- 3. DASHBOARD WEB (FLASK) CÓ ĐĂNG NHẬP ---
+from flask import request, Response
 
-app = Flask('')
+# Hàm kiểm tra tài khoản (Bạn có thể đổi admin/password ở đây)
+def check_auth(username, password):
+    return username == 'admin' and password == '123456'
+
+def authenticate():
+    return Response(
+        'Vui lòng đăng nhập để truy cập Dashboard!', 401,
+        {'WWW-Authenticate': 'Basic realm="Login Required"'}
+    )
 
 @app.route('/')
-def home():
-    return "Bot is alive!"
+def dashboard():
+    # Kiểm tra đăng nhập
+    auth = request.authorization
+    if not auth or not check_auth(auth.username, auth.password):
+        return authenticate()
 
-def run_web():
-    app.run(host='0.0.0.0', port=8080)
+    # Lấy dữ liệu từ Database
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tickets ORDER BY timestamp DESC")
+    rows = cursor.fetchall()
+    conn.close()
 
-async def daily_scheduler():
-    """Hàm tự động gửi báo cáo lúc 20:00 (Giờ VN = 13:00 UTC)"""
-    while True:
-        now = datetime.now().strftime("%H:%M")
-        # Render dùng giờ UTC, nên 13:00 UTC là 20:00 VN
-        if now == "13:00": 
-            report_text = get_daily_report()
-            await bot.send_message(ADMIN_GROUP_ID, f"🔔 **BÁO CÁO TỰ ĐỘNG**\n\n{report_text}")
-            await asyncio.sleep(61) 
-        await asyncio.sleep(30)
-
-async def main():
-    # 1. Chạy Web giả cho Render
-    threading.Thread(target=run_web, daemon=True).start()
-    
-    # 2. Chạy bộ hẹn giờ báo cáo tự động
-    asyncio.create_task(daily_scheduler())
-    
-    print("Bot đang chạy, đã mở cổng giả và hẹn giờ báo cáo 20:00...")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Bot đã dừng!")
+    # Giao diện HTML Dashboard
+    html = """
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin Panel - Helpdesk</title>
+        <style>
+            body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+            .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            h2 { color: #1a73e8; text-align: center; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #f8f9fa; color: #5f6368; }
+            .status-moi { color: #d93025; font-weight: bold; background: #fce8e6; padding: 4px 8px; border-radius: 4px; }
+            .status-xuly { color: #e37400; font-weight: bold; background: #fff4e5; padding: 4px 8px; border-radius: 4px; }
+            .status-xong { color: #188038; font-weight: bold; background: #e6f4ea; padding: 4px 8px; border-radius: 4px; }
+            tr:hover { background-color: #f1f3f4; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>🚀 DASHBOARD QUẢN LÝ TICKET</h2>
+            <table>
+                <tr>
+                    <th>Thời gian</th>
+                    <th>Nội dung yêu cầu</th>
+                    <th>Trạng thái</th>
+                    <th>Người đảm nhận</th>
+                </tr>
+    """
+    for row in rows:
+        st_class = "status-moi" if row['status'] == "Mới" else ("status-xuly" if row['status'] == "Đang xử lý" else "status-xong")
+        html += f"""
+                <tr>
+                    <td>{row['timestamp']}</td>
+                    <td>{row['issue']}</td>
+                    <td><span class="{st_class}">{row['status']}</span></td>
+                    <td>{row['handler_name']}</td>
+                </tr>
+        """
+    html += "</table></div></body></html>"
+    return html
