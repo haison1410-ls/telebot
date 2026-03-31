@@ -189,7 +189,7 @@ async def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
-        await bot.send_photo(ADMIN_GROUP_ID, photo=message.photo[-1].file_id, caption=header, reply_markup=builder.as_markup())
+    await bot.send_photo(ADMIN_GROUP_ID, photo=message.photo[-1].file_id, caption=header, reply_markup=builder.as_markup())
     
     await message.answer("✅ Đã gửi yêu cầu!")
 
