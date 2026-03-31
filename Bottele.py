@@ -12,7 +12,7 @@ import threading
 # --- 1. CẤU HÌNH ---
 API_TOKEN = '8576826985:AAE3CkWqTN0q7FuqXpZsOQkfenRObAFNBK4'
 ADMIN_GROUP_ID = -5260948214 
-DB_NAME = 'helpdesk_v4.db'
+DB_NAME = 'helpdesk_final.db'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
