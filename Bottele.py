@@ -12,7 +12,7 @@ import threading
 # --- 1. CẤU HÌNH ---
 API_TOKEN = '8576826985:AAE3CkWqTN0q7FuqXpZsOQkfenRObAFNBK4'
 ADMIN_GROUP_ID = -5260948214 
-DB_NAME = 'helpdesk_final.db'
+DB_NAME = 'helpdesk_final.db' # Hãy đảm bảo tên này khớp để tránh lỗi "no such column"
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -37,15 +37,12 @@ def init_db():
 
 init_db()
 
-# --- 3. DASHBOARD WEB (FLASK) ---
+# --- 3. DASHBOARD WEB (FLASK) VỚI KPI ---
 def check_auth(username, password):
     return username == 'admin' and password == '123456'
 
 def authenticate():
-    return Response(
-        'Vui lòng đăng nhập!', 401,
-        {'WWW-Authenticate': 'Basic realm="Login Required"'}
-    )
+    return Response('Vui lòng đăng nhập!', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 @app.route('/')
 def dashboard():
@@ -56,34 +53,84 @@ def dashboard():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tickets ORDER BY timestamp DESC")
-    rows = cursor.fetchall()
+
+    # Lấy KPI: Đếm số lượng ticket theo từng Admin
+    cursor.execute("""
+        SELECT handler_name, 
+               COUNT(CASE WHEN status = 'Đang xử lý' THEN 1 END) as process,
+               COUNT(CASE WHEN status = 'Hoàn thành' THEN 1 END) as done
+        FROM tickets 
+        WHERE handler_name != 'Chưa có'
+        GROUP BY handler_name
+        ORDER BY done DESC
+    """)
+    kpi_rows = cursor.fetchall()
+
+    # Lấy danh sách Ticket gần đây
+    cursor.execute("SELECT * FROM tickets ORDER BY timestamp DESC LIMIT 50")
+    ticket_rows = cursor.fetchall()
     conn.close()
 
-    html = """
+    # Giao diện HTML
+    html = f"""
     <html>
     <head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Admin Dashboard</title>
+        <title>KPI Dashboard - Helpdesk</title>
         <style>
-            body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }
-            .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            h2 { color: #1a73e8; text-align: center; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-            th { background-color: #f8f9fa; }
-            .status-moi { color: #d93025; background: #fce8e6; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-            .status-xuly { color: #e37400; background: #fff4e5; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-            .status-xong { color: #188038; background: #e6f4ea; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+            body {{ font-family: 'Segoe UI', sans-serif; background: #f4f7f9; margin: 0; padding: 20px; }}
+            .container {{ max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }}
+            h2, h3 {{ color: #1a73e8; text-align: center; }}
+            
+            /* Style cho bảng KPI */
+            .kpi-table {{ width: 100%; border-collapse: collapse; margin-bottom: 40px; background: #fff; border-radius: 8px; overflow: hidden; }}
+            .kpi-table th {{ background: #1a73e8; color: white; padding: 12px; }}
+            .kpi-table td {{ padding: 12px; text-align: center; border-bottom: 1px solid #eee; }}
+            .rank-1 {{ background: #fff9c4; font-weight: bold; }} /* Màu vàng cho người giỏi nhất */
+            
+            /* Style cho bảng Ticket */
+            .ticket-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+            .ticket-table th {{ background: #f8f9fa; color: #5f6368; padding: 10px; border-bottom: 2px solid #dee2e6; text-align: left; }}
+            .ticket-table td {{ padding: 10px; border-bottom: 1px solid #eee; }}
+            .status-moi {{ color: white; background: #d93025; padding: 3px 8px; border-radius: 4px; font-size: 12px; }}
+            .status-xuly {{ color: white; background: #f29900; padding: 3px 8px; border-radius: 4px; font-size: 12px; }}
+            .status-xong {{ color: white; background: #188038; padding: 3px 8px; border-radius: 4px; font-size: 12px; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h2>🚀 DASHBOARD QUẢN LÝ TICKET</h2>
-            <table>
-                <tr><th>Thời gian</th><th>Yêu cầu</th><th>Trạng thái</th><th>Người đảm nhận</th></tr>
+            <h2>📊 HỆ THỐNG QUẢN LÝ & KPI</h2>
+            <hr>
+            
+            <h3>🏆 BẢNG XẾP HẠNG NĂNG SUẤT ADMIN</h3>
+            <table class="kpi-table">
+                <tr>
+                    <th>Admin</th>
+                    <th>⚡ Đang xử lý</th>
+                    <th>✅ Đã hoàn thành</th>
+                    <th>⭐ Tổng Ticket</th>
+                </tr>
     """
-    for row in rows:
+    for i, kpi in enumerate(kpi_rows):
+        row_class = "rank-1" if i == 0 else ""
+        total = kpi['process'] + kpi['done']
+        html += f"""
+                <tr class="{row_class}">
+                    <td>{kpi['handler_name']}</td>
+                    <td style="color: #f29900; font-weight: bold;">{kpi['process']}</td>
+                    <td style="color: #188038; font-weight: bold;">{kpi['done']}</td>
+                    <td>{total}</td>
+                </tr>
+        """
+    
+    html += """
+            </table>
+
+            <h3>📝 DANH SÁCH TICKET MỚI NHẤT</h3>
+            <table class="ticket-table">
+                <tr><th>Thời gian</th><th>Nội dung</th><th>Trạng thái</th><th>Người phụ trách</th></tr>
+    """
+    for row in ticket_rows:
         st = row['status']
         st_class = "status-moi" if st == "Mới" else ("status-xuly" if st == "Đang xử lý" else "status-xong")
         html += f"<tr><td>{row['timestamp']}</td><td>{row['issue']}</td><td><span class='{st_class}'>{st}</span></td><td>{row['handler_name']}</td></tr>"
@@ -91,7 +138,7 @@ def dashboard():
     html += "</table></div></body></html>"
     return html
 
-# --- 4. HANDLERS ---
+# --- 4. CÁC HANDLERS CỦA BOT (GIỮ NGUYÊN NHƯ CODE BẠN GỬI) ---
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer("Chào mừng! Hãy gửi yêu cầu hoặc hình ảnh lỗi tại đây.")
@@ -124,23 +171,18 @@ async def handle_user_request(message: Message):
 async def process_accept(callback: types.CallbackQuery):
     user_id = int(callback.data.split("_")[1])
     admin_name = callback.from_user.full_name
-    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("UPDATE tickets SET status = ?, handler_name = ? WHERE user_id = ? AND status = ?", 
                    ("Đang xử lý", admin_name, user_id, "Mới"))
     conn.commit()
     conn.close()
-
     await bot.send_message(user_id, f"👨‍💻 {admin_name} đang xử lý yêu cầu của bạn!")
     builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text="✅ Hoàn thành", callback_data=f"done_{user_id}"))
-    
     text = (callback.message.text or callback.message.caption) + f"\n\n📌 **Đã nhận bởi:** {admin_name}"
     try:
-        if callback.message.text:
-            await callback.message.edit_text(text, reply_markup=builder.as_markup())
-        else:
-            await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
+        if callback.message.text: await callback.message.edit_text(text, reply_markup=builder.as_markup())
+        else: await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
     except: pass
     await callback.answer("Bạn đã nhận ticket!")
 
@@ -162,7 +204,7 @@ async def send_report(message: Message):
     cursor.execute("SELECT status, COUNT(*) FROM tickets GROUP BY status")
     stats = dict(cursor.fetchall())
     conn.close()
-    msg = f"📊 **THỐNG KÊ**\n🆕 Mới: {stats.get('Mới', 0)}\n⏳ Đang xử lý: {stats.get('Đang xử lý', 0)}\n✅ Xong: {stats.get('Hoàn thành', 0)}"
+    msg = f"📊 **THỐNG KÊ CHUNG**\n🆕 Mới: {stats.get('Mới', 0)}\n⏳ Đang xử lý: {stats.get('Đang xử lý', 0)}\n✅ Xong: {stats.get('Hoàn thành', 0)}"
     await message.answer(msg)
 
 # --- 5. VẬN HÀNH ---
